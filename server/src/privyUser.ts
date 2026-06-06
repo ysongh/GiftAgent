@@ -4,6 +4,10 @@ export interface RecipientProfile {
   userId: string;
   email: string | null;
   embeddedWalletAddress: `0x${string}` | null;
+  /** Privy wallet id of the embedded wallet (used for server-side signing). */
+  embeddedWalletId: string | null;
+  /** Whether the embedded wallet has been delegated to the app's authorization key. */
+  delegated: boolean;
 }
 
 /**
@@ -18,6 +22,8 @@ export async function profileFromIdentityToken(idToken: string): Promise<Recipie
 
   let email: string | null = null;
   let embeddedWalletAddress: `0x${string}` | null = null;
+  let embeddedWalletId: string | null = null;
+  let delegated = false;
 
   for (const account of user.linked_accounts) {
     if (account.type === "email" && !email) {
@@ -32,8 +38,10 @@ export async function profileFromIdentityToken(idToken: string): Promise<Recipie
       account.connector_type === "embedded"
     ) {
       embeddedWalletAddress = account.address as `0x${string}`;
+      if ("id" in account && account.id) embeddedWalletId = account.id;
+      if ("delegated" in account) delegated = Boolean(account.delegated);
     }
   }
 
-  return { userId: user.id, email, embeddedWalletAddress };
+  return { userId: user.id, email, embeddedWalletAddress, embeddedWalletId, delegated };
 }

@@ -3,6 +3,7 @@ import express from "express";
 import { env } from "./env.js";
 import { requirePrivyAuth, type AuthedRequest } from "./middleware/auth.js";
 import { giftsRouter } from "./routes/gifts.js";
+import { agentRouter } from "./routes/agent.js";
 
 const app = express();
 
@@ -31,6 +32,9 @@ app.get("/api/me", requirePrivyAuth, (req: AuthedRequest, res) => {
 
 // Phase 1: gift + claim flow.
 app.use("/api/gifts", giftsRouter);
+
+// Phase 2: agent (tool-use x402 spend) + budget.
+app.use("/api", agentRouter);
 
 app.listen(env.port, () => {
   console.log(`[server] listening on http://localhost:${env.port}`);

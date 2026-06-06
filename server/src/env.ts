@@ -51,7 +51,38 @@ export const env = {
   emailProvider: optional("EMAIL_PROVIDER", "console"),
   resendApiKey: process.env.RESEND_API_KEY,
   emailFrom: optional("EMAIL_FROM", "GiftAgent <onboarding@resend.dev>"),
+
+  // Phase 2: delegated signing (Privy authorization key) + agent.
+  // P-256 authorization private key from the Privy dashboard (DER/PKCS8 base64, no PEM headers).
+  privyAuthorizationKey: process.env.PRIVY_AUTHORIZATION_KEY,
+  privyAuthorizationKeyId: process.env.PRIVY_AUTHORIZATION_KEY_ID, // quorum/owner id (informational)
+
+  // Anthropic agent.
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+
+  // The single x402 service the agent can spend against (Phase 2 scope).
+  agentServiceUrl: optional("AGENT_SERVICE_URL", "http://localhost:4021/weather"),
+  agentServiceName: optional("AGENT_SERVICE_NAME", "x402-test-weather"),
 };
+
+/** Authorization key, asserted present (used only on delegated-signing paths). */
+export function requirePrivyAuthorizationKey(): string {
+  if (!env.privyAuthorizationKey) {
+    throw new Error(
+      "PRIVY_AUTHORIZATION_KEY is not set. Create an authorization key in the Privy dashboard (Wallets → Authorization keys) and add it to .env.",
+    );
+  }
+  return env.privyAuthorizationKey;
+}
+
+/** Anthropic API key, asserted present (used only on the agent route). */
+export function requireAnthropicApiKey(): string {
+  if (!env.anthropicApiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not set.");
+  }
+  return env.anthropicApiKey;
+}
 
 /** Treasury wallet id, asserted present (used only on routes that move money). */
 export function requireTreasuryWalletId(): string {

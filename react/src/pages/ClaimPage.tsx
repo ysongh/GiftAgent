@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { usePrivy } from '@privy-io/react-auth'
 import { API_URL, useAuthedFetch } from '../lib/api'
 
@@ -74,6 +74,9 @@ export default function ClaimPage() {
             <a href={`https://sepolia.basescan.org/tx/${result.txHash}`} target="_blank" rel="noreferrer">
               {result.txHash.slice(0, 12)}…
             </a>
+          </p>
+          <p style={{ marginTop: 12 }}>
+            <Link to="/agent">→ Authorize the agent and start spending</Link>
           </p>
         </div>
       ) : gift.alreadyClaimed ? (

@@ -57,6 +57,42 @@ read from the verified Privy **identity token** — never trusted from the clien
 `EMAIL_PROVIDER=resend` (with `RESEND_API_KEY`) sends real mail. Any other value is console-only.
 The claim link is **always** logged to the server console, so the demo works with no email setup.
 
+## Phase 2: the spending agent (delegated x402)
+
+The recipient's embedded wallet is the x402 payer. The server signs payments on their behalf
+via **Privy delegated actions**: the user grants one-time consent in the SPA, and the server
+signs in Privy's TEE using a P-256 authorization key. The gift amount is a hard budget cap.
+
+### Privy Dashboard setup (required, one-time)
+
+1. **Create an authorization key.** Dashboard → **Wallets → Authorization keys → New key**.
+   Copy the generated **Private key** into `.env` as `PRIVY_AUTHORIZATION_KEY` (it's a
+   DER/PKCS8 base64 string, no PEM headers — Privy does not store it, so save it now). Note
+   the key's id → `PRIVY_AUTHORIZATION_KEY_ID`.
+2. **Enable delegated actions** for embedded wallets in the app's wallet settings, so the
+   client `delegateWallet` consent attaches this authorization key as a signer.
+3. Embedded-wallet-on-login is already configured in the SPA (Phase 1).
+
+### Flow
+
+1. Recipient claims a gift → their embedded wallet holds the USDC (Phase 1).
+2. In the SPA (`/agent`), they click **Authorize agent** → `delegateWallet({ address, chainType: 'ethereum' })`.
+3. They chat an intent → `POST /api/agent`. Claude (tool use) may call `call_paid_service`,
+   which runs the x402 loop signing with the **delegated** wallet, **within budget**.
+4. The cap is enforced in three places: the tool pre-check, inside `spendViaX402`, and the
+   ledger sum. The model can request a spend but never moves funds; an over-budget call is
+   refused without paying.
+
+### Routes
+
+| Route | Auth | Purpose |
+|-------|------|---------|
+| `POST /api/agent` | access token + `privy-id-token` | run the agent (tool-use x402 spend) |
+| `GET /api/budget` | access token | `{ cap, spent, remaining }` |
+
+x402 payments use EIP-3009 (gasless for the payer), so the recipient wallet needs **no ETH** —
+just the gifted USDC.
+
 ## x402 (Phase 0)
 
 `pnpm x402:seller` + `pnpm x402:test` exercise the x402 payment loop. See `scripts/`.
