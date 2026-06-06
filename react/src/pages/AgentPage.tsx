@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { usePrivy, useDelegatedActions } from '@privy-io/react-auth'
+import { usePrivy, useSigners } from '@privy-io/react-auth'
 import { useAuthedFetch } from '../lib/api'
+
+// The authorization key's id (from the Privy dashboard). The client adds it as a
+// session signer on the user's TEE wallet so the server can sign on their behalf.
+const AUTH_SIGNER_ID = import.meta.env.VITE_PRIVY_AUTHORIZATION_KEY_ID as string | undefined
 
 interface Budget {
   cap: number
@@ -25,9 +29,13 @@ function useEmbeddedWallet() {
 
 export default function AgentPage() {
   const { ready, authenticated, login } = usePrivy()
-  const { delegateWallet } = useDelegatedActions()
+  const { addSigners } = useSigners()
   const { address, delegated } = useEmbeddedWallet()
   const authedFetch = useAuthedFetch()
+
+  // Authorized = a session signer is on the wallet. Seed from the wallet's
+  // delegated flag, and flip true after a successful addSigners call.
+  const [authorized, setAuthorized] = useState(false)
 
   const [budget, setBudget] = useState<Budget | null>(null)
   const [budgetError, setBudgetError] = useState('')
@@ -60,11 +68,25 @@ export default function AgentPage() {
     if (authenticated) void refreshBudget()
   }, [authenticated, refreshBudget])
 
+  // Seed authorized state from the wallet's delegated flag once known.
+  useEffect(() => {
+    if (delegated) setAuthorized(true)
+  }, [delegated])
+
   async function authorize() {
     if (!address) return
+    if (!AUTH_SIGNER_ID) {
+      setChatError(
+        'VITE_PRIVY_AUTHORIZATION_KEY_ID is not set. Add your Privy authorization key id to react/.env.',
+      )
+      return
+    }
     setAuthorizing(true)
+    setChatError('')
     try {
-      await delegateWallet({ address, chainType: 'ethereum' })
+      // Add the app's authorization key as a session signer on the TEE wallet.
+      await addSigners({ address, signers: [{ signerId: AUTH_SIGNER_ID }] })
+      setAuthorized(true)
     } catch (err) {
       setChatError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -120,7 +142,7 @@ export default function AgentPage() {
       )}
 
       {/* Authorize step */}
-      {!delegated ? (
+      {!authorized ? (
         <div style={{ padding: 16, background: '#fff6e5', borderRadius: 8, marginBottom: 16 }}>
           <p>Authorize the agent to spend your gifted USDC on your behalf (one-time consent).</p>
           <button onClick={authorize} disabled={authorizing || !address}>
@@ -139,9 +161,9 @@ export default function AgentPage() {
           placeholder="Ask the agent to do something that may require a paid service…"
           rows={3}
           style={{ padding: 8, fontFamily: 'inherit' }}
-          disabled={!delegated}
+          disabled={!authorized}
         />
-        <button type="submit" disabled={!delegated || thinking || !message.trim()}>
+        <button type="submit" disabled={!authorized || thinking || !message.trim()}>
           {thinking ? 'Thinking…' : 'Send'}
         </button>
       </form>

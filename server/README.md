@@ -63,22 +63,31 @@ The recipient's embedded wallet is the x402 payer. The server signs payments on 
 via **Privy delegated actions**: the user grants one-time consent in the SPA, and the server
 signs in Privy's TEE using a P-256 authorization key. The gift amount is a hard budget cap.
 
+This app uses Privy **TEE wallets**, so server access is granted via **session signers**
+(not on-device `delegateWallet`). The server signs by authorizing wallet RPCs with the
+app's P-256 authorization key, which the user adds to their wallet as a session signer.
+
 ### Privy Dashboard setup (required, one-time)
 
 1. **Create an authorization key.** Dashboard → **Wallets → Authorization keys → New key**.
-   Copy the generated **Private key** into `.env` as `PRIVY_AUTHORIZATION_KEY` (it's a
+   Copy the generated **Private key** into `server/.env` as `PRIVY_AUTHORIZATION_KEY` (it's a
    DER/PKCS8 base64 string, no PEM headers — Privy does not store it, so save it now). Note
-   the key's id → `PRIVY_AUTHORIZATION_KEY_ID`.
-2. **Enable delegated actions** for embedded wallets in the app's wallet settings, so the
-   client `delegateWallet` consent attaches this authorization key as a signer.
+   the key's **id** and set it in **both**:
+   - `server/.env` → `PRIVY_AUTHORIZATION_KEY_ID`
+   - `react/.env.local` → `VITE_PRIVY_AUTHORIZATION_KEY_ID` (public id only)
+2. Also enable identity tokens (User management → Authentication → Advanced → "Return user
+   data in an identity token") — needed for claim + agent.
 3. Embedded-wallet-on-login is already configured in the SPA (Phase 1).
 
 ### Flow
 
 1. Recipient claims a gift → their embedded wallet holds the USDC (Phase 1).
-2. In the SPA (`/agent`), they click **Authorize agent** → `delegateWallet({ address, chainType: 'ethereum' })`.
+2. In the SPA (`/agent`), they click **Authorize agent** →
+   `useSigners().addSigners({ address, signers: [{ signerId: <auth key id> }] })`, adding the
+   app's authorization key as a **session signer** on their TEE wallet.
 3. They chat an intent → `POST /api/agent`. Claude (tool use) may call `call_paid_service`,
-   which runs the x402 loop signing with the **delegated** wallet, **within budget**.
+   which runs the x402 loop signing via the session signer (authorization key in
+   `authorization_context`), **within budget**.
 4. The cap is enforced in three places: the tool pre-check, inside `spendViaX402`, and the
    ledger sum. The model can request a spend but never moves funds; an over-budget call is
    refused without paying.

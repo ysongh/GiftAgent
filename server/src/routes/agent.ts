@@ -57,9 +57,9 @@ agentRouter.post("/agent", requirePrivyAuth, async (req: AuthedRequest, res: Res
   if (!profile.embeddedWalletId || !profile.embeddedWalletAddress) {
     return res.status(400).json({ error: "No embedded wallet found" });
   }
-  if (!profile.delegated) {
-    return res.status(403).json({ error: "Wallet not delegated. Authorize the agent first." });
-  }
+  // Note: for TEE wallets, authorization is granted via a session signer (the app's
+  // authorization key). The identity token's `delegated` flag may not reflect that, so
+  // we don't hard-block here — instead we surface a clear message if signing is rejected.
 
   const budget = await getBudgetForUser(req.privy!.userId);
   if (!budget) return res.status(400).json({ error: "No claimed gift to spend" });
@@ -78,13 +78,27 @@ agentRouter.post("/agent", requirePrivyAuth, async (req: AuthedRequest, res: Res
     const remaining = current?.remaining ?? 0;
     const giftId = current?.giftId;
 
-    const spend = await spendViaX402({
-      signer,
-      targetUrl: env.agentServiceUrl,
-      network: env.network,
-      maxAmountUsdc: remaining,
-      rpcUrl: env.baseRpcUrl,
-    });
+    let spend;
+    try {
+      spend = await spendViaX402({
+        signer,
+        targetUrl: env.agentServiceUrl,
+        network: env.network,
+        maxAmountUsdc: remaining,
+        rpcUrl: env.baseRpcUrl,
+      });
+    } catch (err) {
+      // Most likely the wallet has no session signer yet (not authorized), or signing failed.
+      console.error("[agent] spend/signing failed:", err);
+      return {
+        paid: false,
+        error: true,
+        note:
+          "Could not sign the payment on the user's wallet. They likely need to authorize the " +
+          "agent first (add the session signer), or signing was rejected. Ask them to click " +
+          "'Authorize agent' and try again.",
+      };
+    }
 
     if (!spend.ok) {
       return {
