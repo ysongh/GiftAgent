@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { env } from "./env.js";
 import { requirePrivyAuth, type AuthedRequest } from "./middleware/auth.js";
+import { giftsRouter } from "./routes/gifts.js";
 
 const app = express();
 
@@ -27,6 +28,9 @@ app.get("/health", (_req, res) => {
 app.get("/api/me", requirePrivyAuth, (req: AuthedRequest, res) => {
   res.json({ userId: req.privy!.userId });
 });
+
+// Phase 1: gift + claim flow.
+app.use("/api/gifts", giftsRouter);
 
 app.listen(env.port, () => {
   console.log(`[server] listening on http://localhost:${env.port}`);
